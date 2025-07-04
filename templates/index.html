@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <title>PiBirdHouse v1.0</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin: 0; background: #f9f9f9; }
+        header { display: flex; align-items: center; padding: 10px; background: #1b8335; color: white; }
+        header img { height: 80px; margin-right: 15px; }
+        .section { margin: 20px auto; max-width: 600px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px #ccc; }
+        button { padding: 10px 20px; font-size: 1.2em; margin: 10px; cursor: pointer; }
+        footer { margin-top: 40px; color: #777; }
+        input[type=range] { width: 80%; }
+	button {
+ 	   background-color: #1b8335; /* vert élégant */
+	   color: white;
+    	   border: none;
+    	   padding: 10px 20px;
+    	   text-align: center;
+    	   font-size: 16px;
+	   margin: 5px;
+    	   border-radius: 5px;
+    	   cursor: pointer;
+    	   transition: background-color 0.3s ease;
+	}
+
+	button:hover {
+    	   background-color: #45a049; /* vert légèrement plus foncé au survol */
+	}
+    </style>
+</head>
+<body>
+    <header>
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo">
+        <h1>PiBirdHouse v1.0</h1>
+    </header>
+
+    <div class="section">
+        <h2>Suivi des passages d'oiseaux</h2>
+        <div id="passage">Chargement...</div>
+        <button onclick="window.location.href='/stats'">Voir les graphiques</button>
+    </div>
+
+    <div class="section">
+        <button id="streamBtn" onclick="toggleStream()">Lancer la vidéo</button>
+	<br />
+        <button id="ledBtn" onclick="toggleIR()">Allumer LED IR</button>
+        <input type="range" min="0" max="100" value="100" id="irSlider" onchange="setIRIntensity(this.value)">
+    </div>
+
+    <div class="section" style="font-size:0.8em; color:#666;">
+        <div id="voltage">Tension: -- V</div>
+        <div id="status">Temp: -- °C | Charge: --</div>
+        <button onclick="shutdown()">Arrêt système</button>
+    </div>
+
+    <footer> An Aerodynamics Project </footer>
+
+    <script>
+        let streamRunning = false;
+        let ledOn = false;
+
+        function toggleStream() {
+            fetch('/toggle_stream', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                streamRunning = data.video_running;
+                document.getElementById("streamBtn").innerText = streamRunning ? "Arrêter la vidéo" : "Lancer la vidéo";
+                if(streamRunning) window.open("http://192.168.1.41:8080", "_blank");
+            });
+        }
+
+        function toggleIR() {
+            fetch('/toggle_ir', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                ledOn = data.led_on;
+                document.getElementById("ledBtn").innerText = ledOn ? "Éteindre LED IR" : "Allumer LED IR";
+            });
+        }
+
+        function setIRIntensity(val) {
+            fetch('/set_ir_intensity', { method: 'POST', body: new URLSearchParams({'intensity': val}) });
+        }
+
+        function shutdown() {
+            fetch('/shutdown', { method: 'POST' });
+        }
+
+        function refreshData() {
+            fetch('/voltage').then(res => res.json()).then(data => {
+                document.getElementById("voltage").innerText = `Tension: ${data.value.toFixed(2)} V`;
+            });
+            fetch('/status').then(res => res.json()).then(data => {
+                document.getElementById("status").innerText = `Temp: ${data.temperature} °C | Charge: ${data.load5}`;
+            });
+            fetch('/api/passages').then(res => res.json()).then(data => {
+                if(data.length > 0){
+                    let last = data[data.length-1];
+                    document.getElementById("passage").innerText = `Dernier: ${last.datetime}, Jour: ${last.daily}, Total: ${last.total}`;
+                }
+            });
+        }
+        setInterval(refreshData, 5000);
+        refreshData();
+    </script>
+</body>
+</html>
