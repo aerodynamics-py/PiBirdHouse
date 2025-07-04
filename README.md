@@ -50,6 +50,8 @@ It is designed for reliable, standalone field deployment, powered by battery and
 
 ### Raspberry Pi Setup
 
+First copy all the file from git in a folder @ /home/user_name/PiBirdHouse. Keep the structure of files and folders.
+
 ```bash
 sudo apt update && sudo apt upgrade
 sudo apt install python3-pip python3-venv libcamera-tools
@@ -93,7 +95,7 @@ Upload `ups_raspberry_v1.ino` via Arduino IDE.
 ## Code Explanation
 
 ### app.py
-
+You have to set your username close to the end of the file in a directory name.
 Flask server with routes for:
 
 - `/video_feed`: streaming video frames
@@ -113,7 +115,7 @@ Standalone HTTP MJPEG streaming server using **picamera2** or **OpenCV**, access
 ---
 
 ### bird\_detection.py
-
+You have to set your user name on line 9.
 Reads IR sensor or GPIO input to detect bird passages, logs entries to `static/passages.log` with:
 
 ```
@@ -137,7 +139,6 @@ Monitors GPIO17. If it reads **LOW** continuously for a safety period, executes 
 - **Video stream control:** toggle button (shows “Start Video” or “Stop Video”)
 - **IR LED control:** toggle button (ON/OFF state) + PWM slider for brightness
 - **System status footer:** voltage, CPU temperature, load average displayed discreetly
-- **Footer:** *“An Aerodynamics Project”*
 
 ---
 
@@ -165,33 +166,9 @@ Responsive design, modern green (#1b8335) theme for bar colours.
 
 ---
 
-## Future Improvements
-
-- Bird species recognition with TensorFlow Lite
-- Automatic IR LED brightness adaptation based on daylight
-- Remote data upload to cloud dashboards
-- Integration with solar panel performance monitoring
-
----
-
 ## Conclusion
 
 With **PiBirdHouse**, you can build an **elegant, autonomous smart birdhouse** for real-time wildlife observation, powered by open-source technologies and robust power management.\
 Expand it for species recognition or environmental sensing to create your own DIY nature observatory.
 
----
 
-## Images
-
-*(Add photos here: final assembly, wiring close-ups, screenshots of UI and graphs.)*
-
----
-
-## License
-
-MIT License
-
----
-
-```
-```
