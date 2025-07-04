@@ -44,8 +44,6 @@ It is designed for reliable, standalone field deployment, powered by battery and
   - Wake signal: digital output pin to GPIO3 (Pi wake pin) via logic shifter
 - **Raspberry Pi GPIO17:** Connected to Arduino low battery shutdown pin
 
-🔗 *Insert Fritzing wiring diagram here*.
-
 ---
 
 ## Software Installation
