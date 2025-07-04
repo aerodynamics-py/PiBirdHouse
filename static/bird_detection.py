@@ -8,17 +8,17 @@ from datetime import datetime
 IR_PIN = 18
 LOG_FILE = "/home/USER_NAME/PiBirdHouse/static/passages.log"
 
-# === Initialisation GPIO ===
+# === GPIO Initialization ===
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(IR_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-# === Initialisation des compteurs ===
+# === Initialize counters ===
 total = 0
-total_jour = 0
+daily_total = 0
 current_day = datetime.now().date()
-raw_count = 0  # compteur brut de toutes les détections
+raw_count = 0  # raw count of all detections
 
-# === Vérifier si le fichier existe et récupérer le dernier total sans incrémenter ===
+# === Check if the log file exists and load last totals without incrementing ===
 if os.path.isfile(LOG_FILE):
     with open(LOG_FILE, "r") as f:
         lines = f.readlines()
@@ -27,55 +27,57 @@ if os.path.isfile(LOG_FILE):
             try:
                 parts = last_line.split(";")
                 if len(parts) >= 3:
-                    total_jour = int(parts[1].strip())
+                    daily_total = int(parts[1].strip())
                     total = int(parts[2].strip())
             except Exception as e:
-                print("Erreur lors de la lecture du fichier existant :", e)
+                print("Error reading existing log file:", e)
 
-print(f"Reprise avec total_jour={total_jour}, total={total}")
+print(f"Resuming with daily_total={daily_total}, total={total}")
 
-print("Attente de stabilisation du capteur (1 seconde)...")
-time.sleep(1)  # Pause pour éviter faux positif à l'initialisation
+print("Waiting for sensor stabilization (1 second)...")
+time.sleep(1)  # Pause to avoid false positives at startup
 
-print("Barrière IR active (détection moitié des passages). Appuyer Ctrl+C pour arrêter.")
+print("IR barrier active (counting half of the passages). Press Ctrl+C to stop.")
 
 try:
     while True:
         if GPIO.input(IR_PIN) == GPIO.HIGH:
-            # Passage détecté (faisceau coupé)
+            # Passage detected (beam interrupted)
             raw_count += 1
 
             if raw_count % 2 == 0:
-                # Incrémenter uniquement une fois sur deux
+                # Increment only every second detection
                 now = datetime.now()
                 if now.date() != current_day:
-                    # Nouveau jour : reset compteur jour
+                    # New day: reset daily counter
                     current_day = now.date()
-                    total_jour = 1
+                    daily_total = 1
                 else:
-                    total_jour += 1
+                    daily_total += 1
 
                 total += 1
 
                 timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
-                line = f"{timestamp} ; {total_jour} ; {total}\n"
+                line = f"{timestamp} ; {daily_total} ; {total}\n"
 
+                # Append new record to log file
                 with open(LOG_FILE, "a") as f:
                     f.write(line)
                     f.flush()
 
                 print(line.strip())
             else:
-                print("Passage détecté (non compté)")
+                print("Passage detected (not counted)")
 
-            # Anti-rebond : attendre que l'objet soit parti
+            # Debounce: wait until the object leaves the sensor
             while GPIO.input(IR_PIN) == GPIO.HIGH:
                 time.sleep(0.05)
 
         time.sleep(0.05)
 
 except KeyboardInterrupt:
-    print("Arrêt du programme.")
+    print("Program stopped by user.")
 
 finally:
     GPIO.cleanup()
+

@@ -12,7 +12,7 @@ picam2 = Picamera2()
 picam2.start()
 
 # Répertoire de sauvegarde des images
-save_dir = "/home/USER_NAME/PiBirdHouse/Images"
+save_dir = "/home/artemis/PiBirdHouse/Images"
 os.makedirs(save_dir, exist_ok=True)
 
 # Variable pour stocker la dernière image

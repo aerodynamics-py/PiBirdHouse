@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" />
-  <title>Statistiques des passages</title>
+  <title>Passage Statistics</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
@@ -26,11 +26,11 @@
       box-shadow: 0 0 10px rgba(0,0,0,0.1);
     }
     canvas {
-            max-width: 100%;
-            height: 70vh;
-            margin: 20px auto;
-            display: block;
-        }
+      max-width: 100%;
+      height: 70vh;
+      margin: 20px auto;
+      display: block;
+    }
     .button {
       background-color: #1b8335;
       color: white;
@@ -53,29 +53,30 @@
   <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" style="height:80px; margin-right:10px;">
   <h1>PiBirdHouse v1.0</h1>
 </header>
- 
 
   <div class="chart-container">
-    <canvas id="passagesParHeure"></canvas>
+    <canvas id="passagesPerHour"></canvas>
   </div>
 
   <div class="chart-container">
-    <canvas id="passagesParJour"></canvas>
+    <canvas id="passagesPerDay"></canvas>
   </div>
 
   <div class="chart-container">
-    <canvas id="passagesParMois"></canvas>
+    <canvas id="passagesPerMonth"></canvas>
   </div>
 
-  <a href="/" class="button">Retour à l'accueil</a>
+  <a href="/" class="button">Back to Home</a>
 
   <script>
+    // Load passage data from API
     async function loadPassages() {
       const response = await fetch('/api/passages');
-      if (!response.ok) throw new Error('Erreur lors du chargement des données');
+      if (!response.ok) throw new Error('Error loading data');
       return await response.json();
     }
 
+    // Render a bar chart with given data
     function renderChart(ctx, labels, data, label) {
       new Chart(ctx, {
         type: 'bar',
@@ -98,37 +99,38 @@
     async function main() {
       const passages = await loadPassages();
 
-      // Passages par heure (0-23)
-      const heures = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
-      const parHeure = Array(24).fill(0);
+      // Passages per hour (0-23)
+      const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
+      const perHour = Array(24).fill(0);
       passages.forEach(p => {
         const h = new Date(p.datetime).getHours();
-        parHeure[h]++;
+        perHour[h]++;
       });
-      renderChart(document.getElementById('passagesParHeure'), heures, parHeure, "Passages par heure");
+      renderChart(document.getElementById('passagesPerHour'), hours, perHour, "Passages per Hour");
 
-      // Passages par jour (365 derniers jours)
-      const jours = {};
+      // Passages per day (last 365 days)
+      const days = {};
       passages.forEach(p => {
         const date = p.datetime.split(' ')[0];
-        jours[date] = (jours[date] || 0) + 1;
+        days[date] = (days[date] || 0) + 1;
       });
-      const labelsJours = Object.keys(jours);
-      const dataJours = Object.values(jours);
-      renderChart(document.getElementById('passagesParJour'), labelsJours, dataJours, "Passages par jour");
+      const dayLabels = Object.keys(days);
+      const dayData = Object.values(days);
+      renderChart(document.getElementById('passagesPerDay'), dayLabels, dayData, "Passages per Day");
 
-      // Passages par mois (synthèse)
-      const mois = {};
+      // Passages per month (summary)
+      const months = {};
       passages.forEach(p => {
         const m = p.datetime.slice(0,7);
-        mois[m] = (mois[m] || 0) + 1;
+        months[m] = (months[m] || 0) + 1;
       });
-      const labelsMois = Object.keys(mois);
-      const dataMois = Object.values(mois);
-      renderChart(document.getElementById('passagesParMois'), labelsMois, dataMois, "Passages par mois");
+      const monthLabels = Object.keys(months);
+      const monthData = Object.values(months);
+      renderChart(document.getElementById('passagesPerMonth'), monthLabels, monthData, "Passages per Month");
     }
 
     main().catch(err => console.error(err));
   </script>
 </body>
 </html>
+
