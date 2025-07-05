@@ -27,11 +27,17 @@ if os.path.isfile(LOG_FILE):
             try:
                 parts = last_line.split(";")
                 if len(parts) >= 3:
-                    daily_total = int(parts[1].strip())
+                    last_date_str = parts[0].strip().split(" ")[0]
+                    last_date = datetime.strptime(last_date_str, "%Y-%m-%d").date()
+                    if last_date == current_day:
+                        daily_total = int(parts[1].strip())
+                    else:
+                        daily_total = 0  # New day: reset daily count to 0 at start
                     total = int(parts[2].strip())
             except Exception as e:
                 print("Error reading existing log file:", e)
 
+print(f"Jour actuel : {current_day}")
 print(f"Resuming with daily_total={daily_total}, total={total}")
 
 print("Waiting for sensor stabilization (1 second)...")
@@ -46,7 +52,6 @@ try:
             raw_count += 1
 
             if raw_count % 2 == 0:
-                # Increment only every second detection
                 now = datetime.now()
                 if now.date() != current_day:
                     # New day: reset daily counter
@@ -80,4 +85,3 @@ except KeyboardInterrupt:
 
 finally:
     GPIO.cleanup()
-
