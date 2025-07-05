@@ -29,6 +29,7 @@ led_on = False                    # State variable to track if LED is on
 # ================================
 video_process = None              # Process handle for video streaming
 video_running = False             # State variable to track if video is running
+video_timer = None
 
 # ================================
 # Initialize Serial Communication with Arduino
@@ -65,6 +66,7 @@ def read_voltage():
 # Start the voltage reading thread as a daemon (automatically closes with main program)
 t_thread = threading.Thread(target=read_voltage, daemon=True)
 t_thread.start()
+
 
 # ================================
 # Flask Routes (Web API Endpoints)
@@ -141,28 +143,53 @@ def set_ir_intensity():
 
 @app.route('/toggle_stream', methods=['POST'])
 def toggle_stream():
-    global video_process, video_running
+    global video_process, video_running, video_timer
+
     if video_running:
-        # If video is running, terminate the process to stop it
+        # Stop the video
         if video_process:
             video_process.terminate()
+            try:
+                video_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                video_process.kill()
             video_process = None
         video_running = False
+
+        # Cancel the timer if running
+        if video_timer:
+            video_timer.cancel()
+            video_timer = None
+
     else:
-        # If video is not running, start the stream_server.py script
+        # Before starting, ensure no old process is blocking the port
+        os.system("fuser -k 8080/tcp")
+
+        # Start the video stream
         video_process = subprocess.Popen(['/usr/bin/python3', './static/stream_server.py'])
         video_running = True
-        # Auto-stop video after 60 seconds for safety/power saving
-        threading.Timer(60, auto_stop_stream).start()
+
+        # Start auto-stop timer
+        video_timer = threading.Timer(60, auto_stop_stream)
+        video_timer.start()
+
     return jsonify({'video_running': video_running})
 
 def auto_stop_stream():
-    # Function to auto-stop video streaming after timer ends
-    global video_process, video_running
+    global video_process, video_running, video_timer
+
     if video_process:
-        video_process.terminate()
+        try:
+            video_process.terminate()
+            video_process.wait(timeout=5)
+        except Exception:
+            video_process.kill()
         video_process = None
-        video_running = False
+
+    video_running = False
+
+    # Clear timer
+    video_timer = None
 
 # ================================
 # API endpoint to get passage data for stats.html
@@ -209,4 +236,3 @@ def api_passage():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
-
