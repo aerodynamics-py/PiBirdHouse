@@ -1,110 +1,152 @@
-import io
-import time
-import threading
-import http.server
-import socketserver
-import os
+#!/usr/bin/env python3
+# stream_server.py (version corrigée)
+
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from socketserver import ThreadingMixIn
 from picamera2 import Picamera2
+import io
+import threading
+import time
 from PIL import Image
+import os
+from datetime import datetime
 
-# Initialisation de la caméra
-picam2 = Picamera2()
-picam2.start()
+PORT = 8080
 
-# Répertoire de sauvegarde des images
-save_dir = "/home/artemis/PiBirdHouse/Images"
-os.makedirs(save_dir, exist_ok=True)
+class StreamingOutput:
+    def __init__(self):
+        self.frame = None
+        self.condition = threading.Condition()
 
-# Variable pour stocker la dernière image
-latest_frame = None
-lock = threading.Lock()
+    def set_frame(self, frame):
+        with self.condition:
+            self.frame = frame
+            self.condition.notify_all()
 
-def capture_frames():
-    global latest_frame
-    while True:
-        frame = picam2.capture_array()
-        image = Image.fromarray(frame).convert("RGB")
-        with io.BytesIO() as buf:
-            image.save(buf, format='JPEG')
-            with lock:
-                latest_frame = buf.getvalue()
-        time.sleep(0.1)  # ≈ 10 FPS
-
-class MJPEGHandler(http.server.BaseHTTPRequestHandler):
+class StreamingHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/':
+            # Main HTML page
             self.send_response(200)
             self.send_header('Content-type', 'text/html; charset=utf-8')
             self.end_headers()
             html = """<!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>PiBirdHouse v1.0 - Flux Vidéo</title>
-    <style>
-        body { font-family: sans-serif; text-align: center; margin: 0; padding: 20px; background-color: #f4f4f4; }
-        header { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 20px; }
-        header img { height: 50px; }
-        h1 { margin: 0; font-size: 24px; color: #333; }
-        .video-container { background: #fff; padding: 10px; border-radius: 8px; display: inline-block; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        button { padding: 10px 20px; font-size: 16px; margin-top: 10px; background-color: #1b8335; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        button:hover { background-color: #45a049; }
-        footer { margin-top: 20px; color: #888; font-size: 14px; }
-    </style>
+  <meta charset="UTF-8">
+  <title>PiBirdHouse Stream</title>
+  <link rel="icon" type="image/png" href="/static/logo.png">
+  <style>
+    body { margin:0; background:#f4f4f4; font-family:sans-serif; text-align:center; }
+    h1 { background:#1b8335; color:white; padding:10px; }
+    img { width:90%; max-width:640px; }
+    button {
+      background:#1b8335; color:white; border:none; padding:10px 20px;
+      font-size:1em; border-radius:5px; cursor:pointer; margin:10px;
+    }
+    button:hover { background:#14682a; }
+  </style>
 </head>
 <body>
-    <header>
-        <h1>PiBirdHouse v1.0 - Flux Vidéo</h1>
-    </header>
-
-    <div class="video-container">
-        <img src="/video" style="max-width:100%; border:1px solid #aaa;">
-        <form method="POST" action="/capture">
-            <button type="submit">📸 Capturer l'image</button>
-        </form>
-    </div>
-
-    <footer>
-        An Aerodynamics Project
-    </footer>
+  <h1>PiBirdHouse Live Stream</h1>
+  <img src="/stream.mjpg">
+  <br>
+  <button onclick="capture()">Capture Image</button>
+  <script>
+    function capture() {
+      fetch('/capture').then(res => {
+        if(res.ok) alert('✅ Image captured!');
+        else alert('❌ Capture failed.');
+      });
+    }
+  </script>
 </body>
 </html>"""
             self.wfile.write(html.encode('utf-8'))
-
-        elif self.path == '/video':
+        elif self.path == '/stream.mjpg':
             self.send_response(200)
-            self.send_header('Content-type', 'multipart/x-mixed-replace; boundary=frame')
+            self.send_header('Age', 0)
+            self.send_header('Cache-Control', 'no-cache, private')
+            self.send_header('Pragma', 'no-cache')
+            self.send_header('Content-Type', 'multipart/x-mixed-replace; boundary=FRAME')
             self.end_headers()
-            while True:
-                with lock:
-                    frame = latest_frame
-                if frame:
-                    self.wfile.write(b"--frame\r\n")
-                    self.wfile.write(b"Content-Type: image/jpeg\r\n\r\n")
+            try:
+                while True:
+                    with output.condition:
+                        output.condition.wait()
+                        frame = output.frame
+                    self.wfile.write(b'--FRAME\r\n')
+                    self.send_header('Content-Type', 'image/jpeg')
+                    self.send_header('Content-Length', str(len(frame)))
+                    self.end_headers()
                     self.wfile.write(frame)
-                    self.wfile.write(b"\r\n")
-                time.sleep(0.1)
+                    self.wfile.write(b'\r\n')
+            except Exception as e:
+                print(f"📷 Client disconnected: {e}")
+        elif self.path == '/capture':
+            # Save current frame to Images folder
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            images_dir = os.path.join(script_dir, '../Images')
+            os.makedirs(images_dir, exist_ok=True)
+            filename = datetime.now().strftime("%Y%m%d_%H%M%S.jpg")
+            path = os.path.join(images_dir, filename)
+            with output.condition:
+                if output.frame:
+                    with open(path, 'wb') as f:
+                        f.write(output.frame)
+                    self.send_response(200)
+                    self.end_headers()
+                    self.wfile.write(b"OK")
+                    print(f"📸 Image captured: {filename}")
+                else:
+                    self.send_response(500)
+                    self.end_headers()
+                    self.wfile.write(b"No frame")
+        elif self.path == '/static/logo.png':
+            # Serve logo from static folder
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            logo_path = os.path.join(script_dir, 'logo.png')
+            if not os.path.isfile(logo_path):
+                self.send_error(404)
+                return
+            self.send_response(200)
+            self.send_header('Content-type', 'image/png')
+            self.end_headers()
+            with open(logo_path, 'rb') as f:
+                self.wfile.write(f.read())
         else:
             self.send_error(404)
-
-    def do_POST(self):
-        if self.path == '/capture':
-            with lock:
-                frame = latest_frame
-            if frame:
-                filename = time.strftime("capture_%Y%m%d_%H%M%S.jpg")
-                filepath = os.path.join(save_dir, filename)
-                with open(filepath, "wb") as f:
-                    f.write(frame)
-            self.send_response(303)
-            self.send_header('Location', '/')
             self.end_headers()
 
-# Lancement du thread de capture d'images
-threading.Thread(target=capture_frames, daemon=True).start()
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    daemon_threads = True
 
-# Serveur HTTP
-PORT = 8080
-with socketserver.TCPServer(("", PORT), MJPEGHandler) as httpd:
-    print(f"Serveur MJPEG en cours sur http://0.0.0.0:{PORT}")
-    httpd.serve_forever()
+if __name__ == '__main__':
+    picam2 = Picamera2()
+    picam2.configure(picam2.create_video_configuration(main={"size": (640, 480)}))
+    output = StreamingOutput()
+
+    # Start camera
+    picam2.start()
+
+    def capture_frames():
+        while True:
+            frame = picam2.capture_array()
+            img = Image.fromarray(frame).convert('RGB')
+            buf = io.BytesIO()
+            img.save(buf, format='JPEG')
+            output.set_frame(buf.getvalue())
+            time.sleep(0.1)  # ~10 fps
+
+    t = threading.Thread(target=capture_frames, daemon=True)
+    t.start()
+
+    try:
+        server = ThreadedHTTPServer(('', PORT), StreamingHandler)
+        print(f"✅ Stream server running at http://0.0.0.0:{PORT}")
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n🛑 Shutting down stream server.")
+    finally:
+        picam2.stop()
+        server.server_close()
