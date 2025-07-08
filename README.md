@@ -16,24 +16,6 @@ It is designed for reliable, standalone field deployment, powered by battery and
 
 ---
 
-## Bill of Materials (BoM)
-
-| Component                                        | Quantity | Notes                                 |
-| ------------------------------------------------ | -------- | ------------------------------------- |
-| Raspberry Pi 4 Model B (4GB recommended)         | 1        | Running Raspberry Pi OS Bookworm      |
-| Arduino Nano                                     | 1        | For voltage sensing and wake signal   |
-| Raspberry Pi Camera Module 3 NoIR Wide           | 1        | IMX708-based for low-light capability |
-| PowerBoost 1000C                                 | 1        | For battery boost and charging        |
-| LiPo 3.7V Battery                                | 1        | Capacity as needed                    |
-| IR LEDs 850nm                                    | 6        | For night illumination                |
-| IRF540N or IRLZ44N MOSFET                        | 1        | PWM control of IR LEDs                |
-| Logic Level Shifter (BSS138-based)               | 1        | For safe voltage translation          |
-| MicroSD Card (16GB+)                             | 1        | Preloaded with RPi OS                 |
-| Wires, resistors, soldering tools                | -        | Assembly                              |
-| Optional: 3D printed housing or laser-cut panels | -        | Mechanical structure                  |
-
----
-
 ## Wiring Diagram
 
 ### Key connections:
@@ -96,6 +78,62 @@ Upload `ups_raspberry_v1.ino` via Arduino IDE.
 
 ## Code Explanation
 
+```bash
+PiBirdHouse
+│
+├── app.py (Flask Backend)
+│   ├── / (index.html)
+│   ├── /voltage (get battery voltage from Arduino via serial)
+│   ├── /status (CPU temp + load avg)
+│   ├── /shutdown (system shutdown)
+│   ├── /toggle_stream (start/stop stream_server.py)
+│   ├── /toggle_ir (LED IR ON/OFF toggle)
+│   ├── /set_ir_intensity (set PWM value)
+│   └── /api/passages (serve passages.log data for stats.html)
+│
+├── gpio_shutdown.py (Service)
+│   └── Monitors GPIO pin for low battery → triggers safe shutdown
+│
+├── bird_detection.py (Service)
+│   └── Detects bird passages via sensor → logs to static/passages.log
+│
+├── stream_server.py (Standalone MJPEG Server)
+│   ├── Streams live video from picamera2/OpenCV
+│   └── Provides capture image function (saved to Images/)
+│
+├── ups_raspberry_v1.ino (Arduino Nano)
+│   ├── Measures LiPo battery voltage via voltage divider
+│   ├── Sends voltage data to Raspberry Pi via UART serial
+│   └── Sends wake-up pulse when voltage recovers
+│
+├── templates/
+│   ├── index.html
+│   │   ├── Logo (logo.png) + Title (PiBirdHouse v1.0)
+│   │   ├── Bird passages section (today + total)
+│   │   ├── Button to open stats.html
+│   │   ├── Video stream control button (start/stop)
+│   │   ├── LED IR control button (ON/OFF) + PWM slider
+│   │   └── Footer: battery voltage, CPU temp, load avg, project signature
+│   │
+│   └── stats.html
+│       ├── Bargraph: passages per hour (all days aggregated)
+│       ├── Bargraph: passages per day (last 365 days)
+│       ├── Bargraph: passages per month (monthly summary)
+│       └── Return button to index.html
+│
+├── static/
+│   ├── logo.png (favicon + displayed in UI)
+│   ├── passages.log (bird passages data file)
+│   └── stream_server.py (if launched from static/)
+│
+├── Images/
+│   └── [timestamped_capture_files].jpg
+│
+└── Services (systemd)
+    ├── pibirdhouse.service (runs app.py on boot)
+    ├── gpio_shutdown.service (runs gpio_shutdown.py on boot)
+    └── bird_detection.service (runs bird_detection.py on boot)
+```
 ### app.py
 You have to set your username close to the end of the file in a directory name.
 Flask server with routes for:
