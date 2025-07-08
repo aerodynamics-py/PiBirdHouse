@@ -108,14 +108,28 @@
       });
       renderChart(document.getElementById('passagesPerHour'), hours, perHour, "Passages per Hour");
 
-      // Passages per day (last 365 days)
+      // Passages per day (last 365 days, rolling window)
       const days = {};
       passages.forEach(p => {
         const date = p.datetime.split(' ')[0];
         days[date] = (days[date] || 0) + 1;
       });
-      const dayLabels = Object.keys(days);
-      const dayData = Object.values(days);
+
+      const dayLabels = [];
+      const dayData = [];
+      const today = new Date();
+      const pastDate = new Date();
+      pastDate.setDate(today.getDate() - 364); // include today + 364 days before = 365 days
+
+      for (let d = new Date(pastDate); d <= today; d.setDate(d.getDate() + 1)) {
+        const year = d.getFullYear();
+        const monthStr = (d.getMonth() + 1).toString().padStart(2, '0');
+        const dayStr = d.getDate().toString().padStart(2, '0');
+        const dateStr = `${year}-${monthStr}-${dayStr}`;
+        dayLabels.push(dateStr);
+        dayData.push(days[dateStr] || 0);
+      }
+
       renderChart(document.getElementById('passagesPerDay'), dayLabels, dayData, "Passages per Day");
 
       // Passages per month (summary)
@@ -133,4 +147,3 @@
   </script>
 </body>
 </html>
-
